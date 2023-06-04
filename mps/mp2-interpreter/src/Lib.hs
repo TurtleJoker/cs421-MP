@@ -84,6 +84,7 @@ compOps = H.fromList [ ("<", (<))
 --- -----------------
 
 liftIntOp :: (Int -> Int -> Int) -> Val -> Val -> Val
+liftIntOp div _         (IntVal 0) = ExnVal "Division by 0"
 liftIntOp op (IntVal x) (IntVal y) = IntVal $ op x y
 liftIntOp _ _ _ = ExnVal "Cannot lift"
 
@@ -103,8 +104,8 @@ eval :: Exp -> Env -> Val
 
 --- ### Constants
 
-eval (IntExp i)  _ = IntVal i
-eval (BoolExp b) _ = BoolVal b
+eval (IntExp i)  env = IntVal i
+eval (BoolExp b) env = BoolVal b
 
 --- ### Variables
 
@@ -116,31 +117,18 @@ eval (VarExp s) env = case H.lookup s env of
 --- ### Arithmetic
 
 eval (IntOpExp op e1 e2) env =
-    let v1 = eval e1 env
-        v2 = eval e2 env
-    in case (v1, v2) of
-        (IntVal x, IntVal 0) | op == "/" -> ExnVal "Division by 0"
-        (IntVal x, IntVal y) -> let opFunc = fromJust $ H.lookup op intOps
-                                in liftIntOp opFunc v1 v2
-        _ -> ExnVal "Cannot lift"
+    let Just val = H.lookup op intOps
+    in liftIntOp val (eval e1 env) (eval e2 env)
         
 --- ### Boolean and Comparison Operators
 
 eval (BoolOpExp op e1 e2) env =
-    let v1 = eval e1 env
-        v2 = eval e2 env
-    in case (v1, v2) of
-        (BoolVal x, BoolVal y) -> let opFunc = fromJust $ H.lookup op boolOps
-                                  in liftBoolOp opFunc v1 v2
-        _ -> ExnVal "Cannot lift"
+    let Just val = H.lookup op boolOps
+    in liftIntOp val (eval e1 env) (eval e2 env)
 
 eval (CompOpExp op e1 e2) env =
-    let v1 = eval e1 env
-        v2 = eval e2 env
-    in case (v1, v2) of
-        (IntVal x, IntVal y) -> let opFunc = fromJust $ H.lookup op compOps
-                                in liftCompOp opFunc v1 v2
-        _ -> ExnVal "Cannot lift"
+    let Just val = H.lookup op compOps
+    in liftIntOp val (eval e1 env) (eval e2 env)
 
 --- ### If Expressions
 
@@ -199,10 +187,9 @@ exec (SeqStmt (s:stmts)) penv env =
 --- ### If Statements
 
 exec (IfStmt e1 s1 s2) penv env = case eval e1 env of
-    Right (BoolVal True)  -> exec s1 penv env
-    Right (BoolVal False) -> exec s2 penv env
-    Right _               -> ("exn: Condition is not a Bool", penv, env)
-    Left err              -> (err, penv, env)
+    BoolVal True  -> exec s1 penv env
+    BoolVal False -> exec s2 penv env
+    _             -> ("exn: Condition is not a Bool", penv, env)
 
 --- ### Procedure and Call Statements
 
@@ -214,7 +201,4 @@ exec (CallStmt name args) penv env =
     case H.lookup name penv of
         Nothing -> ("Procedure " ++ name ++ " undefined", penv, env)
         Just (ProcedureStmt _ params body) -> 
-            let argVals = map (\arg -> eval arg env) args
-                paramsAndVals = zip params argVals
-                newEnv = foldr (\(param, Right val) env -> H.insert param val env) env paramsAndVals
-            in exec body penv newEnv
+            exec (body) penv (H.union (H.fromList (zip params (map (\z -> eval z env) args))) (env))
