@@ -88,10 +88,13 @@ liftIntOp op (IntVal x) (IntVal y) = IntVal $ op x y
 liftIntOp _ _ _ = ExnVal "Cannot lift"
 
 liftBoolOp :: (Bool -> Bool -> Bool) -> Val -> Val -> Val
-liftBoolOp = undefined
+liftBoolOp op (BoolVal x) (BoolVal y) = BoolVal $ op x y
+liftBoolOp _ _ _ = ExnVal "Cannot lift"
 
 liftCompOp :: (Int -> Int -> Bool) -> Val -> Val -> Val
-liftCompOp = undefined
+liftCompOp op (IntVal x) (IntVal y) = BoolVal $ op x y
+liftCompOp _ _ _ = ExnVal "Cannot lift"
+
 
 --- Eval
 --- ----
@@ -100,36 +103,73 @@ eval :: Exp -> Env -> Val
 
 --- ### Constants
 
-eval (IntExp i)  _ = undefined
-eval (BoolExp i) _ = undefined
+eval (IntExp i)  _ = IntVal i
+eval (BoolExp b) _ = BoolVal b
 
 --- ### Variables
 
-eval (VarExp s) env = undefined
+eval (VarExp s) env = case H.lookup s env of
+                        Just val -> val
+                        Nothing  -> ExnVal "No match in env"
+
 
 --- ### Arithmetic
 
-eval (IntOpExp op e1 e2) env = undefined
-
+eval (IntOpExp op e1 e2) env =
+    let v1 = eval e1 env
+        v2 = eval e2 env
+    in case (v1, v2) of
+        (IntVal x, IntVal 0) | op == "/" -> ExnVal "Division by 0"
+        (IntVal x, IntVal y) -> let opFunc = fromJust $ H.lookup op intOps
+                                in liftIntOp opFunc v1 v2
+        _ -> ExnVal "Cannot lift"
+        
 --- ### Boolean and Comparison Operators
 
-eval (BoolOpExp op e1 e2) env = undefined
+eval (BoolOpExp op e1 e2) env =
+    let v1 = eval e1 env
+        v2 = eval e2 env
+    in case (v1, v2) of
+        (BoolVal x, BoolVal y) -> let opFunc = fromJust $ H.lookup op boolOps
+                                  in liftBoolOp opFunc v1 v2
+        _ -> ExnVal "Cannot lift"
 
-eval (CompOpExp op e1 e2) env = undefined
+eval (CompOpExp op e1 e2) env =
+    let v1 = eval e1 env
+        v2 = eval e2 env
+    in case (v1, v2) of
+        (IntVal x, IntVal y) -> let opFunc = fromJust $ H.lookup op compOps
+                                in liftCompOp opFunc v1 v2
+        _ -> ExnVal "Cannot lift"
 
 --- ### If Expressions
 
-eval (IfExp e1 e2 e3) env = undefined
+eval (IfExp e1 e2 e3) env = 
+    let v1 = eval e1 env
+    in case v1 of
+        BoolVal True -> eval e2 env
+        BoolVal False -> eval e3 env
+        _ -> ExnVal "Condition is not a Bool"
 
 --- ### Functions and Function Application
 
-eval (FunExp params body) env = undefined
+eval (FunExp params body) env = CloVal params body env
 
-eval (AppExp e1 args) env = undefined
+eval (AppExp e1 args) env = 
+    let v1 = eval e1 env
+        argVals = map (`eval` env) args
+    in case v1 of
+        CloVal params body closureEnv ->
+            let newEnv = H.union (H.fromList (zip params argVals)) closureEnv
+            in eval body newEnv
+        _ -> ExnVal "Apply to non-closure"
 
 --- ### Let Expressions
 
-eval (LetExp pairs body) env = undefined
+eval (LetExp pairs body) env =
+    let newBindings = map (\(s, e) -> (s, eval e env)) pairs
+        newEnv = H.union (H.fromList newBindings) env
+    in eval body newEnv
 
 --- Statements
 --- ----------
@@ -143,18 +183,38 @@ exec (PrintStmt e) penv env = (val, penv, env)
 
 --- ### Set Statements
 
-exec (SetStmt var e) penv env = undefined
+exec (SetStmt var e) penv env =
+    let val = eval e env
+        newEnv = H.insert var val env
+    in ("", penv, newEnv)
 
 --- ### Sequencing
 
-exec (SeqStmt []) penv env = undefined
+exec (SeqStmt []) penv env = ("", penv, env)
+exec (SeqStmt (s:stmts)) penv env =
+    let (out1, newPEnv, newEnv) = exec s penv env
+        (out2, finalPEnv, finalEnv) = exec (SeqStmt stmts) newPEnv newEnv
+    in (out1 ++ out2, finalPEnv, finalEnv)
 
 --- ### If Statements
 
-exec (IfStmt e1 s1 s2) penv env = undefined
+exec (IfStmt e1 s1 s2) penv env = case eval e1 env of
+    Right (BoolVal True)  -> exec s1 penv env
+    Right (BoolVal False) -> exec s2 penv env
+    Right _               -> ("exn: Condition is not a Bool", penv, env)
+    Left err              -> (err, penv, env)
 
 --- ### Procedure and Call Statements
 
-exec p@(ProcedureStmt name args body) penv env = undefined
+exec p@(ProcedureStmt name args body) penv env = 
+    let penv' = H.insert name p penv 
+    in ("", penv', env)
 
-exec (CallStmt name args) penv env = undefined
+exec (CallStmt name args) penv env =
+    case H.lookup name penv of
+        Nothing -> ("Procedure " ++ name ++ " undefined", penv, env)
+        Just (ProcedureStmt _ params body) -> 
+            let argVals = map (\arg -> eval arg env) args
+                paramsAndVals = zip params argVals
+                newEnv = foldr (\(param, Right val) env -> H.insert param val env) env paramsAndVals
+            in exec body penv newEnv
