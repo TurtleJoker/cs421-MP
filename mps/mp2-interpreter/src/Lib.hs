@@ -117,8 +117,8 @@ eval (VarExp s) env = case H.lookup s env of
 --- ### Arithmetic
 
 eval (IntOpExp op e1 e2) env = do
-    v1 <- eval e1 env
-    v2 <- eval e2 env
+    IntVal v1 <- eval e1 env
+    IntVal v2 <- eval e2 env
     case (v1, v2) of
         (IntVal i1, IntVal i2) ->
             if op == "/" && i2 == 0
@@ -130,25 +130,20 @@ eval (IntOpExp op e1 e2) env = do
         
 --- ### Boolean and Comparison Operators
 
+eval :: Exp -> Env -> Maybe Val
 eval (BoolOpExp op e1 e2) env = do
-    v1 <- eval e1 env
-    v2 <- eval e2 env
-    case (v1, v2) of
-        (BoolVal b1, BoolVal b2) ->
-            case H.lookup op boolOps of
-                Just f  -> return (BoolVal (f b1 b2))
-                Nothing -> return (ExnVal "Unknown operator")
-        _ -> return (ExnVal "Cannot lift")
+    BoolVal v1 <- eval e1 env
+    BoolVal v2 <- eval e2 env
+    case lookup op [ ("and", (&&)), ("or", (||)) ] of
+        Just operator -> return $ BoolVal (operator v1 v2)
+        Nothing -> Nothing
 
 eval (CompOpExp op e1 e2) env = do
-    v1 <- eval e1 env
-    v2 <- eval e2 env
-    case (v1, v2) of
-        (IntVal i1, IntVal i2) ->
-            case H.lookup op compOps of
-                Just f  -> return (BoolVal (f i1 i2))
-                Nothing -> return (ExnVal "Unknown operator")
-        _ -> return (ExnVal "Cannot lift")
+    IntVal v1 <- eval e1 env
+    IntVal v2 <- eval e2 env
+    case lookup op [ ("==", (==)), ("/=", (/=)), ("<", (<)), (">", (>)), ("<=", (<=)), (">=", (>=)) ] of
+        Just operator -> return $ BoolVal (operator v1 v2)
+        Nothing -> Nothing
 
 --- ### If Expressions
 
