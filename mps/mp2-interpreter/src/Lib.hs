@@ -84,6 +84,7 @@ compOps = H.fromList [ ("<", (<))
 --- -----------------
 
 liftIntOp :: (Int -> Int -> Int) -> Val -> Val -> Val
+liftIntOp div _         (IntVal 0) = ExnVal "Division by 0"
 liftIntOp op (IntVal x) (IntVal y) = IntVal $ op x y
 liftIntOp _ _ _ = ExnVal "Cannot lift"
 
