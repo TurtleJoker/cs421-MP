@@ -121,7 +121,7 @@ eval (IntOpExp op e1 e2) env = do
     v2 <- eval e2 env
     case (op, v1, v2) of
         ("/", _, IntVal 0) -> fail "exn: Division by 0"
-        (op, IntVal i1, IntVal i2) -> case lookup op intOps of
+        (op, IntVal i1, IntVal i2) -> case H.lookup op intOps of
             Just f -> return (IntVal (f i1 i2))
             Nothing -> fail "exn: Unknown operator"
         otherwise -> fail "exn: Cannot lift"
@@ -133,7 +133,7 @@ eval (BoolOpExp op e1 e2) env = do
     v1 <- eval e1 env
     v2 <- eval e2 env
     case (op, v1, v2) of
-        (op, BoolVal b1, BoolVal b2) -> case lookup op boolOps of
+        (op, BoolVal b1, BoolVal b2) -> case H.lookup op boolOps of
             Just f -> return (BoolVal (f b1 b2))
             Nothing -> fail "exn: Unknown operator"
         otherwise -> fail "exn: Cannot lift"
@@ -142,7 +142,7 @@ eval (CompOpExp op e1 e2) env = do
     v1 <- eval e1 env
     v2 <- eval e2 env
     case (op, v1, v2) of
-        (op, IntVal i1, IntVal i2) -> case lookup op compOps of
+        (op, IntVal i1, IntVal i2) -> case H.lookup op compOps of
             Just f -> return (BoolVal (f i1 i2))
             Nothing -> fail "exn: Unknown operator"
         otherwise -> fail "exn: Cannot lift"
