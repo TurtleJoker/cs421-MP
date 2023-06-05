@@ -84,7 +84,7 @@ compOps = H.fromList [ ("<", (<))
 --- -----------------
 
 liftIntOp :: (Int -> Int -> Int) -> Val -> Val -> Val
-liftIntOp div _         (IntVal 0) = ExnVal "Division by 0"
+liftIntOp op (IntVal x) (IntVal 0) | op == div = ExnVal "Division by 0"
 liftIntOp op (IntVal x) (IntVal y) = IntVal $ op x y
 liftIntOp _ _ _ = ExnVal "Cannot lift"
 
@@ -110,10 +110,9 @@ eval (BoolExp b) env = BoolVal b
 --- ### Variables
 
 eval (VarExp s) env = case H.lookup s env of
-                        Just val -> val
                         Nothing  -> ExnVal "No match in env"
-
-
+                        Just val -> val
+                        
 --- ### Arithmetic
 
 eval (IntOpExp op e1 e2) env =
