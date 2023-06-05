@@ -116,34 +116,19 @@ eval (VarExp s) env = case H.lookup s env of
 
 --- ### Arithmetic
 
-eval (IntOpExp op e1 e2) env = do
-    IntVal v1 <- eval e1 env
-    IntVal v2 <- eval e2 env
-    case (v1, v2) of
-        (IntVal i1, IntVal i2) ->
-            if op == "/" && i2 == 0
-            then return (ExnVal "Division by 0")
-            else case H.lookup op intOps of
-                    Just f  -> return (IntVal (f i1 i2))
-                    Nothing -> return (ExnVal "Unknown operator")
-        _ -> return (ExnVal "Cannot lift")
-        
+eval (IntOpExp op e1 e2) env =
+    let Just val = H.lookup op intOps
+    in liftIntOp val (eval e1 env) (eval e2 env)
+    
 --- ### Boolean and Comparison Operators
 
-eval :: Exp -> Env -> Maybe Val
-eval (BoolOpExp op e1 e2) env = do
-    BoolVal v1 <- eval e1 env
-    BoolVal v2 <- eval e2 env
-    case lookup op [ ("and", (&&)), ("or", (||)) ] of
-        Just operator -> return $ BoolVal (operator v1 v2)
-        Nothing -> Nothing
+eval (BoolOpExp op e1 e2) env =
+    let Just val = H.lookup op boolOps
+    in liftBoolOp val (eval e1 env) (eval e2 env)
 
-eval (CompOpExp op e1 e2) env = do
-    IntVal v1 <- eval e1 env
-    IntVal v2 <- eval e2 env
-    case lookup op [ ("==", (==)), ("/=", (/=)), ("<", (<)), (">", (>)), ("<=", (<=)), (">=", (>=)) ] of
-        Just operator -> return $ BoolVal (operator v1 v2)
-        Nothing -> Nothing
+eval (CompOpExp op e1 e2) env =
+    let Just val = H.lookup op compOps
+    in liftCompOp val (eval e1 env) (eval e2 env)
 
 --- ### If Expressions
 
