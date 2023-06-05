@@ -84,7 +84,6 @@ compOps = H.fromList [ ("<", (<))
 --- -----------------
 
 liftIntOp :: (Int -> Int -> Int) -> Val -> Val -> Val
-liftIntOp div   _       (IntVal 0) = ExnVal "Division by 0"
 liftIntOp op (IntVal x) (IntVal y) = IntVal $ op x y
 liftIntOp _ _ _ = ExnVal "Cannot lift"
 
@@ -116,10 +115,12 @@ eval (VarExp s) env = case H.lookup s env of
 --- ### Arithmetic
 
 eval (IntOpExp op e1 e2) env =
-    let Just val = H.lookup op intOps
-         v1 = eval e1 env
-         v2 = eval e2 env
-    in liftIntOp val v1 v2
+  case H.lookup op intOps of
+    Nothing -> ExnVal "Invalid operator"  -- this should never happen with a valid operator
+    Just intOp -> 
+      case eval e2 env of
+        IntVal 0 | op == "/" -> ExnVal "Division by 0"
+        e2_val -> liftIntOp intOp (eval e1 env) e2_val
     
 --- ### Boolean and Comparison Operators
 
@@ -127,11 +128,13 @@ eval (BoolOpExp op e1 e2) env =
     let Just val = H.lookup op boolOps
     in liftBoolOp val (eval e1 env) (eval e2 env)
 
-eval (CompOpExp op e1 e2) env =
-    let Just val = H.lookup op compOps
-         v1 = eval e1 env
-         v2 = eval e2 env
-    in liftCompOp val v1 v2
+eval (CompOpExp op e1 e2) env = 
+    let compOp = H.lookup op compOps 
+        e1_val = eval e1 env
+        e2_val = eval e2 env
+    in case compOp of
+        Just opFunc -> liftCompOp opFunc e1_val e2_val
+        Nothing -> ExnVal "Cannot lift"
 
 --- ### If Expressions
 
