@@ -116,19 +116,36 @@ eval (VarExp s) env = case H.lookup s env of
 
 --- ### Arithmetic
 
-eval (IntOpExp op e1 e2) env =
-    let Just val = H.lookup op intOps
-    in liftIntOp val (eval e1 env) (eval e2 env)
+eval (IntOpExp op e1 e2) env = do
+    v1 <- eval e1 env
+    v2 <- eval e2 env
+    case (op, v1, v2) of
+        ("/", _, IntVal 0) -> fail "exn: Division by 0"
+        (op, IntVal i1, IntVal i2) -> case lookup op intOps of
+            Just f -> return (IntVal (f i1 i2))
+            Nothing -> fail "exn: Unknown operator"
+        otherwise -> fail "exn: Cannot lift"
+
         
 --- ### Boolean and Comparison Operators
 
-eval (BoolOpExp op e1 e2) env =
-    let Just val = H.lookup op boolOps
-    in liftIntOp val (eval e1 env) (eval e2 env)
+eval (BoolOpExp op e1 e2) env = do
+    v1 <- eval e1 env
+    v2 <- eval e2 env
+    case (op, v1, v2) of
+        (op, BoolVal b1, BoolVal b2) -> case lookup op boolOps of
+            Just f -> return (BoolVal (f b1 b2))
+            Nothing -> fail "exn: Unknown operator"
+        otherwise -> fail "exn: Cannot lift"
 
-eval (CompOpExp op e1 e2) env =
-    let Just val = H.lookup op compOps
-    in liftIntOp val (eval e1 env) (eval e2 env)
+eval (CompOpExp op e1 e2) env = do
+    v1 <- eval e1 env
+    v2 <- eval e2 env
+    case (op, v1, v2) of
+        (op, IntVal i1, IntVal i2) -> case lookup op compOps of
+            Just f -> return (BoolVal (f i1 i2))
+            Nothing -> fail "exn: Unknown operator"
+        otherwise -> fail "exn: Cannot lift"
 
 --- ### If Expressions
 
